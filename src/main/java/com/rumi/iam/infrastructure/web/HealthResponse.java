@@ -1,4 +1,4 @@
-package com.rumi.iam.interfaces.rest;
+package com.rumi.iam.infrastructure.web;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
