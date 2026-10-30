@@ -5,7 +5,6 @@ import com.rumi.iam.domain.model.EmailAddress;
 import com.rumi.iam.domain.model.Role;
 import com.rumi.iam.domain.model.User;
 import com.rumi.iam.domain.service.IssuedToken;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -34,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code JwtDecoderConfiguration} does (HS256, the shared secret as UTF-8 bytes, the default validators
  * and the Rumi claims validator).
  */
-@Disabled("Enabled by the next feat commit")
 class GatewayTokenCompatibilityTest {
 
     private static final String SECRET = "test-only-secret-not-for-production-32b!";

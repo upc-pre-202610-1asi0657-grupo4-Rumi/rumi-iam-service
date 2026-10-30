@@ -1,16 +1,21 @@
 package com.rumi.iam.infrastructure.security;
 
 import com.rumi.iam.domain.service.PasswordHasher;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Component;
 
+@Component
 public class BCryptPasswordHasher implements PasswordHasher {
+
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Override
     public String hash(String rawPassword) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return encoder.encode(rawPassword);
     }
 
     @Override
     public boolean matches(String rawPassword, String passwordHash) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return encoder.matches(rawPassword, passwordHash);
     }
 }

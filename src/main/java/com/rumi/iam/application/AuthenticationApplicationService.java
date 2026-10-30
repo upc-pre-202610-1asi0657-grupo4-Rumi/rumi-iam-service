@@ -6,6 +6,7 @@ import com.rumi.iam.domain.model.User;
 import com.rumi.iam.domain.repository.UserRepository;
 import com.rumi.iam.domain.service.PasswordHasher;
 import com.rumi.iam.domain.service.TokenIssuer;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -15,6 +16,7 @@ import java.util.UUID;
 /**
  * Sign-up (US01) and sign-in (US02).
  */
+@Service
 @Transactional(readOnly = true)
 public class AuthenticationApplicationService {
 

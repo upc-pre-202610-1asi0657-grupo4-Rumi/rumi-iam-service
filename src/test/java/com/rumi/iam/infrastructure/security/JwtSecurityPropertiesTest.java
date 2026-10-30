@@ -1,6 +1,5 @@
 package com.rumi.iam.infrastructure.security;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -11,7 +10,6 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Disabled("Enabled by the next feat commit")
 class JwtSecurityPropertiesTest {
 
     private static final String VALID_SECRET = "x".repeat(32);

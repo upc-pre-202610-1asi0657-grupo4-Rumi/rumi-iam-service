@@ -1,12 +1,10 @@
 package com.rumi.iam.infrastructure.security;
 
 import com.rumi.iam.UserFixtures;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Disabled("Enabled by the next feat commit")
 class BCryptPasswordHasherTest {
 
     private final BCryptPasswordHasher hasher = new BCryptPasswordHasher();
