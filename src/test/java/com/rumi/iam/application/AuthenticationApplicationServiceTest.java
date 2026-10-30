@@ -6,7 +6,6 @@ import com.rumi.iam.domain.model.PasswordPolicy;
 import com.rumi.iam.domain.model.Role;
 import com.rumi.iam.domain.model.User;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -20,7 +19,6 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Disabled("Enabled by the next feat commit")
 class AuthenticationApplicationServiceTest {
 
     private InMemoryUserRepository userRepository;
