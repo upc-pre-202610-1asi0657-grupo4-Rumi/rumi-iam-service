@@ -1,5 +1,6 @@
 package com.rumi.iam.infrastructure.web.validation;
 
+import com.rumi.iam.domain.model.PasswordPolicy;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
@@ -7,6 +8,6 @@ public class PasswordLengthValidator implements ConstraintValidator<PasswordLeng
 
     @Override
     public boolean isValid(String password, ConstraintValidatorContext context) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        return password == null || PasswordPolicy.isValid(password);
     }
 }

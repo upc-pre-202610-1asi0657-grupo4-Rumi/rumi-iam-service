@@ -7,7 +7,6 @@ import com.rumi.iam.application.EmailAlreadyRegisteredException;
 import com.rumi.iam.application.InvalidCredentialsException;
 import com.rumi.iam.domain.model.PasswordPolicy;
 import com.rumi.iam.domain.service.IssuedToken;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -30,7 +29,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@Disabled("Enabled by the next feat commit")
 @WebMvcTest(AuthenticationController.class)
 class AuthenticationControllerTest {
 
