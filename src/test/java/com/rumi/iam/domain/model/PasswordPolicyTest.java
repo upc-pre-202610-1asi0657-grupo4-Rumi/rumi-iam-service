@@ -1,6 +1,5 @@
 package com.rumi.iam.domain.model;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * The minimum is a strength rule counted in characters (code points). The maximum is counted in UTF-8
  * bytes because BCrypt only uses the first 72 bytes of a password.
  */
-@Disabled("Enabled by the next feat commit")
 class PasswordPolicyTest {
 
     @Test
