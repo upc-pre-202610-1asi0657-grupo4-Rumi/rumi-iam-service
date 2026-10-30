@@ -6,17 +6,10 @@ import com.rumi.iam.domain.model.Role;
 import com.rumi.iam.domain.model.User;
 import com.rumi.iam.domain.service.IssuedToken;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,9 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Contract test with rumi-api-gateway: issued tokens are decoded exactly as the gateway's
- * {@code JwtDecoderConfiguration} does (HS256, the shared secret as UTF-8 bytes, the default validators
- * and the Rumi claims validator).
+ * Contract test with rumi-api-gateway: issued tokens are decoded by {@link GatewayJwtDecoder}, built exactly
+ * as the gateway's {@code JwtDecoderConfiguration}.
  */
 class GatewayTokenCompatibilityTest {
 
@@ -45,7 +37,7 @@ class GatewayTokenCompatibilityTest {
         User administrator = UserFixtures.administrator();
 
         IssuedToken token = issuer(SECRET, now).issue(administrator);
-        Jwt jwt = gatewayDecoder(SECRET).decode(token.value());
+        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(token.value());
 
         assertThat(jwt.getHeaders()).containsEntry("alg", "HS256");
         assertThat(jwt.getSubject()).isEqualTo(UserFixtures.USER_ID.toString());
@@ -63,7 +55,7 @@ class GatewayTokenCompatibilityTest {
         User resident = new User(UUID.randomUUID(), new EmailAddress("luis@rumi.pe"), "Luis Quispe",
                 UserFixtures.PASSWORD_HASH, Role.RESIDENT, Set.of(building), UserFixtures.CREATED_AT);
 
-        Jwt jwt = gatewayDecoder(SECRET).decode(issuer(SECRET, now).issue(resident).value());
+        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(issuer(SECRET, now).issue(resident).value());
 
         assertThat(jwt.getClaimAsString("role")).isEqualTo("RESIDENT");
         assertThat(jwt.getClaimAsStringList("buildingIds")).containsExactly(building.toString());
@@ -71,7 +63,7 @@ class GatewayTokenCompatibilityTest {
 
     @Test
     void theTokenCarriesNoPersonalDataBeyondTheContract() {
-        Jwt jwt = gatewayDecoder(SECRET).decode(issuer(SECRET, now).issue(UserFixtures.administrator()).value());
+        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(issuer(SECRET, now).issue(UserFixtures.administrator()).value());
 
         assertThat(jwt.getClaims().keySet()).containsExactlyInAnyOrder("sub", "role", "buildingIds", "iat", "exp");
     }
@@ -80,14 +72,14 @@ class GatewayTokenCompatibilityTest {
     void theGatewayRejectsATokenSignedWithAnotherSecret() {
         String token = issuer(OTHER_SECRET, now).issue(UserFixtures.administrator()).value();
 
-        assertThatThrownBy(() -> gatewayDecoder(SECRET).decode(token)).isInstanceOf(JwtException.class);
+        assertThatThrownBy(() -> GatewayJwtDecoder.create(SECRET).decode(token)).isInstanceOf(JwtException.class);
     }
 
     @Test
     void theGatewayRejectsAnExpiredToken() {
         String token = issuer(SECRET, now.minus(Duration.ofHours(2))).issue(UserFixtures.administrator()).value();
 
-        assertThatThrownBy(() -> gatewayDecoder(SECRET).decode(token)).isInstanceOf(JwtValidationException.class);
+        assertThatThrownBy(() -> GatewayJwtDecoder.create(SECRET).decode(token)).isInstanceOf(JwtValidationException.class);
     }
 
     @Test
@@ -100,16 +92,5 @@ class GatewayTokenCompatibilityTest {
 
     private static NimbusJwtTokenIssuer issuer(String secret, Instant instant) {
         return new NimbusJwtTokenIssuer(new JwtSecurityProperties(secret, null), Clock.fixed(instant, ZoneOffset.UTC));
-    }
-
-    /**
-     * Built as in the gateway's JwtDecoderConfiguration, with the blocking decoder instead of the reactive one.
-     */
-    private static JwtDecoder gatewayDecoder(String secret) {
-        SecretKeySpec key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefault(), new GatewayRumiClaimsValidator()));
-        return decoder;
     }
 }

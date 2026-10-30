@@ -14,7 +14,7 @@ import java.util.UUID;
  * Copy of {@code RumiClaimsValidator} of rumi-api-gateway (develop, infrastructure/security). If the gateway
  * changes its checks, this copy must follow, or the compatibility test stops proving anything.
  */
-class GatewayRumiClaimsValidator implements OAuth2TokenValidator<Jwt> {
+public class GatewayRumiClaimsValidator implements OAuth2TokenValidator<Jwt> {
 
     private static final Set<String> GATEWAY_ROLES = Set.of("ADMINISTRATOR", "RESIDENT");
 
