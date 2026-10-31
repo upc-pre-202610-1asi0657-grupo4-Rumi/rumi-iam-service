@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "Rumi Iam Service API",
-        "description": "REST API of the Identity & Access Management bounded context. Skeleton: only the health endpoint exists; functionality is planned for later sprints.",
+        "description": "REST API of the Identity & Access Management bounded context: administrator sign-up (US01) and sign-in (US02), which issues the JWT the API gateway validates.",
         "version": "0.1.0"
     },
     "servers": [
@@ -13,11 +13,119 @@
     ],
     "tags": [
         {
+            "name": "Authentication",
+            "description": "Administrator sign-up (US01) and sign-in (US02)"
+        },
+        {
             "name": "Health",
             "description": "Liveness of the service skeleton"
         }
     ],
     "paths": {
+        "/api/v1/authentication/sign-up": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Register an administrator",
+                "description": "US01. Creates a user with the ADMINISTRATOR role and no buildings. The password is stored only as a BCrypt hash. Sign in afterwards to get a token.",
+                "operationId": "signUp",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SignUpRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "The administrator was registered",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid data; field errors are listed in 'errors'",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "The email is already registered",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/authentication/sign-in": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Sign in",
+                "description": "US02. Returns an HS256 JWT with the claims sub, role, buildingIds and exp, which the API gateway validates on every request.",
+                "operationId": "signIn",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SignInRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "The credentials are valid",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthenticationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Missing email or password",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unknown email or wrong password; the answer is the same for both",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/authentication/health": {
             "get": {
                 "tags": [
@@ -52,6 +160,160 @@
     },
     "components": {
         "schemas": {
+            "SignUpRequest": {
+                "type": "object",
+                "description": "Data of the administrator to register",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Email used to sign in; stored in lowercase",
+                        "example": "ana.torres@rumi.pe",
+                        "maxLength": 254,
+                        "minLength": 0
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "description": "At least 8 characters and at most 72 bytes in UTF-8",
+                        "example": "Sismo-Seguro-2026"
+                    },
+                    "fullName": {
+                        "type": "string",
+                        "description": "Full name of the administrator",
+                        "example": "Ana Torres",
+                        "maxLength": 100,
+                        "minLength": 0
+                    }
+                },
+                "required": [
+                    "email",
+                    "fullName",
+                    "password"
+                ]
+            },
+            "UserResponse": {
+                "type": "object",
+                "description": "A registered user, without any password data",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Id of the user",
+                        "example": "7d3c5b1e-2f4a-4c8e-9b6d-1a2b3c4d5e6f"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Email of the user, in lowercase",
+                        "example": "ana.torres@rumi.pe"
+                    },
+                    "fullName": {
+                        "type": "string",
+                        "description": "Full name of the user",
+                        "example": "Ana Torres"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Role of the user",
+                        "enum": [
+                            "ADMINISTRATOR",
+                            "RESIDENT"
+                        ],
+                        "example": "ADMINISTRATOR"
+                    }
+                }
+            },
+            "ProblemDetail": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "instance": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "properties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
+            "SignInRequest": {
+                "type": "object",
+                "description": "Credentials of a registered user",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "description": "Email of the user, in any case",
+                        "example": "ana.torres@rumi.pe",
+                        "minLength": 1
+                    },
+                    "password": {
+                        "type": "string",
+                        "format": "password",
+                        "description": "Password of the user",
+                        "example": "Sismo-Seguro-2026",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "email",
+                    "password"
+                ]
+            },
+            "AuthenticationResponse": {
+                "type": "object",
+                "description": "The signed-in user and its access token",
+                "properties": {
+                    "userId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Id of the user",
+                        "example": "7d3c5b1e-2f4a-4c8e-9b6d-1a2b3c4d5e6f"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Email of the user, in lowercase",
+                        "example": "ana.torres@rumi.pe"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Role of the user",
+                        "enum": [
+                            "ADMINISTRATOR",
+                            "RESIDENT"
+                        ],
+                        "example": "ADMINISTRATOR"
+                    },
+                    "token": {
+                        "type": "string",
+                        "description": "HS256 JWT to send as 'Authorization: Bearer <token>' through the API gateway"
+                    },
+                    "tokenType": {
+                        "type": "string",
+                        "description": "Type of the token",
+                        "example": "Bearer"
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the token expires",
+                        "example": "2026-10-29T15:15:00Z"
+                    }
+                }
+            },
             "HealthResponse": {
                 "type": "object",
                 "description": "Liveness information of the service",
