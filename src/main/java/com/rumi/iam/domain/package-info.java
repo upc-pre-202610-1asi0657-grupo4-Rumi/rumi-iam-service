@@ -1,4 +1,4 @@
 /**
- * Domain model of the Identity & Access Management bounded context. Empty until the first feature is built.
+ * Domain model of the Identity & Access Management bounded context: users, roles and the password rule.
  */
 package com.rumi.iam.domain;

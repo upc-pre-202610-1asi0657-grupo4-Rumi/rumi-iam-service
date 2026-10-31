@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:iamdb-test;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+rumi:
+  security:
+    jwt:
+      # Test-only key. Fake on purpose: never use it outside the tests.
+      secret: test-only-secret-not-for-production-32b!
