@@ -45,7 +45,7 @@ class GatewayTokenCompatibilityTest {
         assertThat(jwt.hasClaim("buildingIds")).as("buildingIds must be present, even when empty").isTrue();
         assertThat(jwt.getClaimAsStringList("buildingIds")).isEmpty();
         assertThat(jwt.getIssuedAt()).isEqualTo(now);
-        assertThat(jwt.getExpiresAt()).isEqualTo(now.plus(Duration.ofHours(1)));
+        assertThat(jwt.getExpiresAt()).isEqualTo(now.plus(Duration.ofMinutes(15)));
         assertThat(token.expiresAt()).isEqualTo(jwt.getExpiresAt());
     }
 
@@ -84,10 +84,10 @@ class GatewayTokenCompatibilityTest {
 
     @Test
     void usesTheConfiguredExpiration() {
-        JwtSecurityProperties properties = new JwtSecurityProperties(SECRET, Duration.ofMinutes(15));
+        JwtSecurityProperties properties = new JwtSecurityProperties(SECRET, Duration.ofMinutes(30));
         NimbusJwtTokenIssuer issuer = new NimbusJwtTokenIssuer(properties, Clock.fixed(now, ZoneOffset.UTC));
 
-        assertThat(issuer.issue(UserFixtures.administrator()).expiresAt()).isEqualTo(now.plus(Duration.ofMinutes(15)));
+        assertThat(issuer.issue(UserFixtures.administrator()).expiresAt()).isEqualTo(now.plus(Duration.ofMinutes(30)));
     }
 
     private static NimbusJwtTokenIssuer issuer(String secret, Instant instant) {

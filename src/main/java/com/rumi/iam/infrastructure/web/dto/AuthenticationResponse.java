@@ -18,7 +18,7 @@ public record AuthenticationResponse(
         String token,
         @Schema(description = "Type of the token", example = "Bearer")
         String tokenType,
-        @Schema(description = "When the token expires", example = "2026-10-29T16:00:00Z")
+        @Schema(description = "When the token expires", example = "2026-10-29T15:15:00Z")
         Instant expiresAt
 ) {
 

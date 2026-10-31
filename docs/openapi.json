@@ -310,7 +310,7 @@
                         "type": "string",
                         "format": "date-time",
                         "description": "When the token expires",
-                        "example": "2026-10-29T16:00:00Z"
+                        "example": "2026-10-29T15:15:00Z"
                     }
                 }
             },

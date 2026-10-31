@@ -29,7 +29,7 @@ rumi:
     jwt:
       # HS256 key shared with rumi-api-gateway. Required, at least 32 bytes; there is no default on purpose.
       secret: ${JWT_SECRET:}
-      expiration: ${JWT_EXPIRATION:PT1H}
+      expiration: ${JWT_EXPIRATION:PT15M}
 
 springdoc:
   api-docs:

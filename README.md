@@ -79,7 +79,7 @@ POST /api/v1/authentication/sign-in
   "role": "ADMINISTRATOR",
   "token": "<jwt>",
   "tokenType": "Bearer",
-  "expiresAt": "2026-10-29T16:00:00Z"
+  "expiresAt": "2026-10-29T15:15:00Z"
 }
 ```
 
@@ -111,7 +111,9 @@ HS256, signed with `JWT_SECRET` (the same value the gateway uses). Claims:
 | `sub` | User id (UUID) |
 | `role` | `ADMINISTRATOR` or `RESIDENT` |
 | `buildingIds` | List of building UUIDs; always present, `[]` for a new administrator |
-| `iat`, `exp` | Issue and expiration time; `exp` = `iat` + `JWT_EXPIRATION` |
+| `iat`, `exp` | Issue and expiration time; `exp` = `iat` + `JWT_EXPIRATION` (15 minutes by default) |
+
+There is no refresh token yet: when the token expires, the client must sign in again to get a new one.
 
 `GatewayTokenCompatibilityTest` decodes the issued tokens exactly as the gateway does, so a change that breaks the
 contract fails the build.
@@ -139,7 +141,7 @@ With PostgreSQL (default profile): create `iamdb` and apply [`docs/schema.sql`](
 |---|---|
 | `SERVER_PORT` | `8084` |
 | `JWT_SECRET` | none: required, at least 32 bytes; the service does not start without it |
-| `JWT_EXPIRATION` | `PT1H` (ISO-8601 duration) |
+| `JWT_EXPIRATION` | `PT15M` (ISO-8601 duration) |
 | `IAM_DB_URL` | `jdbc:postgresql://localhost:5432/iamdb` |
 | `IAM_DB_USERNAME` | `postgres` |
 | `IAM_DB_PASSWORD` | `postgres` |

@@ -42,14 +42,14 @@ class JwtSecurityPropertiesTest {
     }
 
     @Test
-    void expiresTokensAfterOneHourByDefault() {
-        assertThat(new JwtSecurityProperties(VALID_SECRET, null).expiration()).isEqualTo(Duration.ofHours(1));
+    void expiresTokensAfterFifteenMinutesByDefault() {
+        assertThat(new JwtSecurityProperties(VALID_SECRET, null).expiration()).isEqualTo(Duration.ofMinutes(15));
     }
 
     @Test
     void acceptsAConfiguredExpiration() {
-        assertThat(new JwtSecurityProperties(VALID_SECRET, Duration.ofMinutes(15)).expiration())
-                .isEqualTo(Duration.ofMinutes(15));
+        assertThat(new JwtSecurityProperties(VALID_SECRET, Duration.ofMinutes(30)).expiration())
+                .isEqualTo(Duration.ofMinutes(30));
     }
 
     @Test

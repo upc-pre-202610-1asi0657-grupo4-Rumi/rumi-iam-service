@@ -13,7 +13,7 @@ import java.time.Duration;
 public record JwtSecurityProperties(String secret, Duration expiration) {
 
     static final int MINIMUM_SECRET_BYTES = 32;
-    static final Duration DEFAULT_EXPIRATION = Duration.ofHours(1);
+    static final Duration DEFAULT_EXPIRATION = Duration.ofMinutes(15);
 
     public JwtSecurityProperties {
         if (secret == null || secret.isBlank()) {
