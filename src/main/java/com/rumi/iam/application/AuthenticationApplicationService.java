@@ -105,6 +105,31 @@ public class AuthenticationApplicationService {
         });
     }
 
+    /**
+     * Sets a new password with a reset link (US03). The password follows the same policy as sign-up. The link
+     * then stops working, and so does every other unused link of the user. Access tokens already issued stay
+     * valid until they expire.
+     */
+    @Transactional
+    public void resetPassword(String rawToken, String newPassword) {
+        PasswordPolicy.requireValid(newPassword);
+        Instant now = clock.instant();
+        PasswordResetToken token = findUsableToken(rawToken, now);
+        User user = userRepository.findById(token.getUserId()).orElseThrow(InvalidResetTokenException::new);
+        userRepository.save(user.withPasswordHash(passwordHasher.hash(newPassword)));
+        resetTokenRepository.save(token.markUsed(now));
+        resetTokenRepository.invalidateUnusedByUserId(user.getId(), now);
+    }
+
+    private PasswordResetToken findUsableToken(String rawToken, Instant now) {
+        if (rawToken == null || rawToken.isBlank()) {
+            throw new InvalidResetTokenException();
+        }
+        return resetTokenRepository.findByTokenHash(resetTokenGenerator.hash(rawToken))
+                .filter(token -> token.isUsable(now))
+                .orElseThrow(InvalidResetTokenException::new);
+    }
+
     private Optional<User> findByEmail(String email) {
         try {
             return userRepository.findByEmail(new EmailAddress(email));

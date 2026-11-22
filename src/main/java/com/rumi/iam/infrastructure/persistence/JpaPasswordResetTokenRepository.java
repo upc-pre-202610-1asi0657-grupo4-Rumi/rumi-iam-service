@@ -24,6 +24,7 @@ public class JpaPasswordResetTokenRepository implements PasswordResetTokenReposi
     }
 
     @Override
+    @Transactional
     public Optional<PasswordResetToken> findByTokenHash(String tokenHash) {
         return springDataRepository.findByTokenHash(tokenHash).map(this::toDomain);
     }
