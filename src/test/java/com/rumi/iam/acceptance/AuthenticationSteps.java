@@ -1,7 +1,8 @@
 package com.rumi.iam.acceptance;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rumi.iam.MutableClock;
+import com.rumi.iam.application.CapturingPasswordResetNotifier;
 import com.rumi.iam.infrastructure.persistence.SpringDataUserRepository;
 import com.rumi.iam.infrastructure.security.GatewayJwtDecoder;
 import io.cucumber.java.Before;
@@ -12,59 +13,69 @@ import io.cucumber.java.en.When;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.test.web.servlet.MockMvc;
 
-import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 public class AuthenticationSteps {
 
     @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    private ApiClient api;
 
     @Autowired
     private SpringDataUserRepository users;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private MutableClock clock;
+
+    @Autowired
+    private CapturingPasswordResetNotifier notifier;
 
     @Value("${rumi.security.jwt.secret}")
     private String secret;
 
     private String lastPassword;
-    private MockHttpServletResponse response;
 
+    /**
+     * Every scenario starts with an empty database, the real time and no reset link sent.
+     */
     @Before
     public void startWithNoUsers() {
+        jdbcTemplate.update("DELETE FROM device_tokens");
+        jdbcTemplate.update("DELETE FROM password_reset_tokens");
         users.deleteAll();
+        clock.setInstant(Instant.now());
+        notifier.clear();
     }
 
     @Given("an administrator is registered with email {string} and password {string}")
     public void anAdministratorIsRegistered(String email, String password) throws Exception {
         aVisitorSignsUp(email, password, "Ana Torres");
-        assertThat(response.getStatus()).isEqualTo(201);
+        assertThat(api.response().getStatus()).isEqualTo(201);
     }
 
     @When("a visitor signs up with email {string}, password {string} and full name {string}")
     public void aVisitorSignsUp(String email, String password, String fullName) throws Exception {
         lastPassword = password;
-        send("/api/v1/authentication/sign-up", Map.of("email", email, "password", password, "fullName", fullName));
+        api.post("/api/v1/authentication/sign-up", Map.of("email", email, "password", password, "fullName", fullName));
     }
 
     @When("the user signs in with email {string} and password {string}")
     public void theUserSignsIn(String email, String password) throws Exception {
         lastPassword = password;
-        send("/api/v1/authentication/sign-in", Map.of("email", email, "password", password));
+        api.post("/api/v1/authentication/sign-in", Map.of("email", email, "password", password));
     }
 
     @Then("the response status is {int}")
     public void theResponseStatusIs(int status) {
-        assertThat(response.getStatus()).isEqualTo(status);
+        assertThat(api.response().getStatus()).isEqualTo(status);
     }
 
     @And("the response has the role {string}")
@@ -89,9 +100,9 @@ public class AuthenticationSteps {
 
     @And("the response is a problem detail with the message {string}")
     public void theResponseIsAProblemDetail(String message) throws Exception {
-        assertThat(MediaType.parseMediaType(response.getContentType()))
+        assertThat(MediaType.parseMediaType(api.response().getContentType()))
                 .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
-        assertThat(body().path("status").asInt()).isEqualTo(response.getStatus());
+        assertThat(body().path("status").asInt()).isEqualTo(api.response().getStatus());
         assertThat(body().path("detail").asText()).isEqualTo(message);
     }
 
@@ -117,19 +128,11 @@ public class AuthenticationSteps {
         assertThat(jwt.getExpiresAt()).isNotNull();
     }
 
-    private void send(String path, Map<String, String> body) throws Exception {
-        response = mockMvc.perform(post(path)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
-                .andReturn()
-                .getResponse();
-    }
-
     private JsonNode body() throws Exception {
-        return objectMapper.readTree(responseText());
+        return api.body();
     }
 
     private String responseText() throws Exception {
-        return response.getContentAsString(StandardCharsets.UTF_8);
+        return api.responseText();
     }
 }

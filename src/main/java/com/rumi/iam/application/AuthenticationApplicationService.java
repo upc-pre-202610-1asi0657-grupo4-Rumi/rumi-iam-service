@@ -2,19 +2,25 @@ package com.rumi.iam.application;
 
 import com.rumi.iam.domain.model.EmailAddress;
 import com.rumi.iam.domain.model.PasswordPolicy;
+import com.rumi.iam.domain.model.PasswordResetToken;
 import com.rumi.iam.domain.model.User;
+import com.rumi.iam.domain.repository.PasswordResetTokenRepository;
 import com.rumi.iam.domain.repository.UserRepository;
+import com.rumi.iam.domain.service.GeneratedResetToken;
 import com.rumi.iam.domain.service.PasswordHasher;
+import com.rumi.iam.domain.service.PasswordResetNotifier;
+import com.rumi.iam.domain.service.ResetTokenGenerator;
 import com.rumi.iam.domain.service.TokenIssuer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Sign-up (US01) and sign-in (US02).
+ * Sign-up (US01), sign-in (US02) and password recovery (US03).
  */
 @Service
 @Transactional(readOnly = true)
@@ -25,6 +31,10 @@ public class AuthenticationApplicationService {
     private final UserRepository userRepository;
     private final PasswordHasher passwordHasher;
     private final TokenIssuer tokenIssuer;
+    private final PasswordResetTokenRepository resetTokenRepository;
+    private final ResetTokenGenerator resetTokenGenerator;
+    private final PasswordResetNotifier passwordResetNotifier;
+    private final PasswordResetPolicy passwordResetPolicy;
     private final Clock clock;
 
     private volatile String dummyHash;
@@ -33,11 +43,19 @@ public class AuthenticationApplicationService {
             UserRepository userRepository,
             PasswordHasher passwordHasher,
             TokenIssuer tokenIssuer,
+            PasswordResetTokenRepository resetTokenRepository,
+            ResetTokenGenerator resetTokenGenerator,
+            PasswordResetNotifier passwordResetNotifier,
+            PasswordResetPolicy passwordResetPolicy,
             Clock clock
     ) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.tokenIssuer = tokenIssuer;
+        this.resetTokenRepository = resetTokenRepository;
+        this.resetTokenGenerator = resetTokenGenerator;
+        this.passwordResetNotifier = passwordResetNotifier;
+        this.passwordResetPolicy = passwordResetPolicy;
         this.clock = clock;
     }
 
@@ -68,6 +86,48 @@ public class AuthenticationApplicationService {
             throw new InvalidCredentialsException();
         }
         return new AuthenticatedUser(user.get(), tokenIssuer.issue(user.get()));
+    }
+
+    /**
+     * Sends a single-use reset link to the user of {@code email} (US03). Earlier unused links of that user stop
+     * working. An unknown or malformed email does nothing and does not fail, so the caller cannot tell which
+     * emails are registered.
+     */
+    @Transactional
+    public void requestPasswordReset(String email) {
+        findByEmail(email).ifPresent(user -> {
+            Instant now = clock.instant();
+            resetTokenRepository.invalidateUnusedByUserId(user.getId(), now);
+            GeneratedResetToken generated = resetTokenGenerator.generate();
+            PasswordResetToken token = resetTokenRepository.save(PasswordResetToken.issue(
+                    UUID.randomUUID(), user.getId(), generated.hash(), now, passwordResetPolicy.tokenLifetime()));
+            passwordResetNotifier.notify(user, generated.raw(), token.getExpiresAt());
+        });
+    }
+
+    /**
+     * Sets a new password with a reset link (US03). The password follows the same policy as sign-up. The link
+     * then stops working, and so does every other unused link of the user. Access tokens already issued stay
+     * valid until they expire.
+     */
+    @Transactional
+    public void resetPassword(String rawToken, String newPassword) {
+        PasswordPolicy.requireValid(newPassword);
+        Instant now = clock.instant();
+        PasswordResetToken token = findUsableToken(rawToken, now);
+        User user = userRepository.findById(token.getUserId()).orElseThrow(InvalidResetTokenException::new);
+        userRepository.save(user.withPasswordHash(passwordHasher.hash(newPassword)));
+        resetTokenRepository.save(token.markUsed(now));
+        resetTokenRepository.invalidateUnusedByUserId(user.getId(), now);
+    }
+
+    private PasswordResetToken findUsableToken(String rawToken, Instant now) {
+        if (rawToken == null || rawToken.isBlank()) {
+            throw new InvalidResetTokenException();
+        }
+        return resetTokenRepository.findByTokenHash(resetTokenGenerator.hash(rawToken))
+                .filter(token -> token.isUsable(now))
+                .orElseThrow(InvalidResetTokenException::new);
     }
 
     private Optional<User> findByEmail(String email) {

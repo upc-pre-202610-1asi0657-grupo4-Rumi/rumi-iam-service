@@ -102,6 +102,34 @@ class UserTest {
     }
 
     @Test
+    void changingThePasswordHashReturnsANewUserWithEverythingElseKept() {
+        Set<UUID> buildingIds = Set.of(UUID.randomUUID());
+        User user = new User(UserFixtures.USER_ID, new EmailAddress(UserFixtures.EMAIL), UserFixtures.FULL_NAME,
+                UserFixtures.PASSWORD_HASH, Role.RESIDENT, buildingIds, UserFixtures.CREATED_AT);
+        String newHash = "$2a$10$zyxwvutsrqponmlkjihgfeJ0kzq5u3cYpZ8iR5x2Qx2b4c6d8e0fG";
+
+        User changed = user.withPasswordHash(newHash);
+
+        assertThat(changed).isNotSameAs(user);
+        assertThat(changed.getPasswordHash()).isEqualTo(newHash);
+        assertThat(user.getPasswordHash()).isEqualTo(UserFixtures.PASSWORD_HASH);
+        assertThat(changed.getId()).isEqualTo(user.getId());
+        assertThat(changed.getEmail()).isEqualTo(user.getEmail());
+        assertThat(changed.getFullName()).isEqualTo(user.getFullName());
+        assertThat(changed.getRole()).isEqualTo(Role.RESIDENT);
+        assertThat(changed.getBuildingIds()).isEqualTo(buildingIds);
+        assertThat(changed.getCreatedAt()).isEqualTo(user.getCreatedAt());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    void rejectsAMissingNewPasswordHash(String newHash) {
+        assertThatThrownBy(() -> UserFixtures.administrator().withPasswordHash(newHash))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Password hash is required");
+    }
+
+    @Test
     void neverPrintsThePasswordHash() {
         assertThat(UserFixtures.administrator().toString()).doesNotContain(UserFixtures.PASSWORD_HASH);
     }

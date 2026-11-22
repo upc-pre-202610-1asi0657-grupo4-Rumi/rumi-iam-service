@@ -5,6 +5,7 @@ import com.rumi.iam.application.AuthenticatedUser;
 import com.rumi.iam.application.AuthenticationApplicationService;
 import com.rumi.iam.application.EmailAlreadyRegisteredException;
 import com.rumi.iam.application.InvalidCredentialsException;
+import com.rumi.iam.application.InvalidResetTokenException;
 import com.rumi.iam.domain.model.PasswordPolicy;
 import com.rumi.iam.domain.service.IssuedToken;
 import org.junit.jupiter.api.Test;
@@ -18,9 +19,12 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,6 +38,10 @@ class AuthenticationControllerTest {
 
     private static final String SIGN_UP = "/api/v1/authentication/sign-up";
     private static final String SIGN_IN = "/api/v1/authentication/sign-in";
+    private static final String FORGOT_PASSWORD = "/api/v1/authentication/forgot-password";
+    private static final String RESET_PASSWORD = "/api/v1/authentication/reset-password";
+    private static final String RESET_TOKEN = "Zm9yLXRlc3RzLW9ubHktbm90LWEtcmVhbC1yZXNldC10b2tlbg";
+    private static final String NEW_PASSWORD = "Nueva-Clave-Sismo-2026";
     private static final String TOKEN = "header.payload.signature";
     private static final Instant EXPIRES_AT = Instant.parse("2026-10-29T16:00:00Z");
 
@@ -174,6 +182,84 @@ class AuthenticationControllerTest {
         verifyNoInteractions(authenticationService);
     }
 
+    @Test
+    void acceptsAPasswordResetRequestWithAnEmptyBody() throws Exception {
+        mockMvc.perform(post(FORGOT_PASSWORD).contentType(MediaType.APPLICATION_JSON)
+                        .content(forgotPasswordJson(UserFixtures.EMAIL)))
+                .andExpect(status().isAccepted())
+                .andExpect(content().string(""));
+        verify(authenticationService).requestPasswordReset(UserFixtures.EMAIL);
+    }
+
+    @Test
+    void answersTheSameForAKnownAndAnUnknownEmail() throws Exception {
+        String known = mockMvc.perform(post(FORGOT_PASSWORD).contentType(MediaType.APPLICATION_JSON)
+                        .content(forgotPasswordJson(UserFixtures.EMAIL)))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+        String unknown = mockMvc.perform(post(FORGOT_PASSWORD).contentType(MediaType.APPLICATION_JSON)
+                        .content(forgotPasswordJson("nobody@rumi.pe")))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(unknown).isEqualTo(known);
+    }
+
+    @Test
+    void rejectsAMalformedEmailOnForgotPassword() throws Exception {
+        expectBadRequest(FORGOT_PASSWORD, forgotPasswordJson("not-an-email"))
+                .andExpect(jsonPath("$.errors.email").value("must be a well-formed email address"));
+        expectBadRequest(FORGOT_PASSWORD, "{}")
+                .andExpect(jsonPath("$.errors.email").value("must not be blank"));
+        expectBadRequest(FORGOT_PASSWORD, forgotPasswordJson("a".repeat(250) + "@rumi.pe"))
+                .andExpect(jsonPath("$.errors.email").exists());
+        verifyNoInteractions(authenticationService);
+    }
+
+    @Test
+    void resetsThePasswordAndAnswersNoContent() throws Exception {
+        mockMvc.perform(post(RESET_PASSWORD).contentType(MediaType.APPLICATION_JSON)
+                        .content(resetPasswordJson(RESET_TOKEN, NEW_PASSWORD)))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+        verify(authenticationService).resetPassword(RESET_TOKEN, NEW_PASSWORD);
+    }
+
+    @Test
+    void rejectsMissingResetFields() throws Exception {
+        expectBadRequest(RESET_PASSWORD, "{}")
+                .andExpect(jsonPath("$.errors.token").value("must not be blank"))
+                .andExpect(jsonPath("$.errors.newPassword").value("must not be null"));
+        verifyNoInteractions(authenticationService);
+    }
+
+    @Test
+    void rejectsAWeakNewPasswordWithoutEchoingIt() throws Exception {
+        expectBadRequest(RESET_PASSWORD, resetPasswordJson(RESET_TOKEN, "tiny-pw"))
+                .andExpect(jsonPath("$.errors.newPassword").value(PasswordPolicy.MESSAGE))
+                .andExpect(content().string(not(containsString("tiny-pw"))))
+                .andExpect(content().string(not(containsString(RESET_TOKEN))));
+        verifyNoInteractions(authenticationService);
+    }
+
+    @Test
+    void rejectsATokenLongerThanTheMaximum() throws Exception {
+        expectBadRequest(RESET_PASSWORD, resetPasswordJson("t".repeat(129), NEW_PASSWORD))
+                .andExpect(jsonPath("$.errors.token").value("size must be between 0 and 128"));
+        verifyNoInteractions(authenticationService);
+    }
+
+    @Test
+    void answersBadRequestForAnInvalidOrExpiredTokenWithoutEchoingIt() throws Exception {
+        doThrow(new InvalidResetTokenException()).when(authenticationService).resetPassword(any(), any());
+
+        expectBadRequest(RESET_PASSWORD, resetPasswordJson(RESET_TOKEN, NEW_PASSWORD))
+                .andExpect(jsonPath("$.detail").value("Invalid or expired token."))
+                .andExpect(jsonPath("$.instance").value(RESET_PASSWORD))
+                .andExpect(content().string(not(containsString(RESET_TOKEN))))
+                .andExpect(content().string(not(containsString(NEW_PASSWORD))));
+    }
+
     private ResultActions expectBadRequest(String path, String body) throws Exception {
         return mockMvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -190,5 +276,15 @@ class AuthenticationControllerTest {
     private static String signInJson(String email, String password) {
         return """
                 {"email":"%s","password":"%s"}""".formatted(email, password);
+    }
+
+    private static String forgotPasswordJson(String email) {
+        return """
+                {"email":"%s"}""".formatted(email);
+    }
+
+    private static String resetPasswordJson(String token, String newPassword) {
+        return """
+                {"token":"%s","newPassword":"%s"}""".formatted(token, newPassword);
     }
 }

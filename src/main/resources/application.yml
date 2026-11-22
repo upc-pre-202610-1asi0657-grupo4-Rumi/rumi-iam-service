@@ -30,6 +30,11 @@ rumi:
       # HS256 key shared with rumi-api-gateway. Required, at least 32 bytes; there is no default on purpose.
       secret: ${JWT_SECRET:}
       expiration: ${JWT_EXPIRATION:PT15M}
+  password-reset:
+    # Frontend page that opens the reset link; the token is added as ?token=...
+    base-url: ${PASSWORD_RESET_BASE_URL:http://localhost:4200/reset-password}
+    # How long a reset link works (US03: 30 minutes).
+    ttl: ${PASSWORD_RESET_TTL:PT30M}
 
 springdoc:
   api-docs:

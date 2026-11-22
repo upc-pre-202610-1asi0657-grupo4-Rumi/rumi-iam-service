@@ -6,7 +6,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * A user of Rumi. Only the hash of the password is ever held here.
+ * A user of Rumi, root of the aggregate that also holds its {@link PasswordResetToken}s and {@link DeviceToken}s.
+ * Only the hash of the password is ever held here.
  */
 public final class User {
 
@@ -37,6 +38,13 @@ public final class User {
     public static User registerAdministrator(UUID id, EmailAddress email, String fullName, String passwordHash,
                                              Instant createdAt) {
         return new User(id, email, fullName, passwordHash, Role.ADMINISTRATOR, Set.of(), createdAt);
+    }
+
+    /**
+     * Returns the same user with a new password hash (US03). The user itself is not changed.
+     */
+    public User withPasswordHash(String newPasswordHash) {
+        return new User(id, email, fullName, newPasswordHash, role, buildingIds, createdAt);
     }
 
     public UUID getId() {
