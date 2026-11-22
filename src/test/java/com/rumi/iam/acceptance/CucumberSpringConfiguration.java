@@ -14,6 +14,6 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(PostgresTestContainer.class)
+@Import({PostgresTestContainer.class, AcceptanceTestConfiguration.class})
 public class CucumberSpringConfiguration {
 }
