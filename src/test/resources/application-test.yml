@@ -1,12 +1,5 @@
-spring:
-  datasource:
-    url: jdbc:h2:mem:iamdb-test;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-
+# Test profile. The datasource is the PostgreSQL container of PostgresTestContainer (@ServiceConnection);
+# the schema comes from docs/schema.sql and Hibernate only validates it (ddl-auto=validate, from application.yml).
 rumi:
   security:
     jwt:
