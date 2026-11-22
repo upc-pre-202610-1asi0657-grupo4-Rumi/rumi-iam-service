@@ -13,7 +13,9 @@ public class OpenApiConfiguration {
         return new OpenAPI().info(new Info()
                 .title("Rumi Iam Service API")
                 .description("REST API of the Identity & Access Management bounded context: "
-                        + "administrator sign-up (US01) and sign-in (US02), which issues the JWT the API gateway validates.")
+                        + "administrator sign-up (US01) and sign-in (US02), which issues the JWT the API gateway validates, "
+                        + "password recovery with single-use links (US03) and the device tokens used for earthquake push "
+                        + "notifications (US14).")
                 .version("0.1.0"));
     }
 }

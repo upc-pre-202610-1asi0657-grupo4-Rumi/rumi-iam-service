@@ -2,7 +2,7 @@
     "openapi": "3.1.0",
     "info": {
         "title": "Rumi Iam Service API",
-        "description": "REST API of the Identity & Access Management bounded context: administrator sign-up (US01) and sign-in (US02), which issues the JWT the API gateway validates.",
+        "description": "REST API of the Identity & Access Management bounded context: administrator sign-up (US01) and sign-in (US02), which issues the JWT the API gateway validates, password recovery with single-use links (US03) and the device tokens used for earthquake push notifications (US14).",
         "version": "0.1.0"
     },
     "servers": [
@@ -13,15 +13,117 @@
     ],
     "tags": [
         {
-            "name": "Authentication",
-            "description": "Administrator sign-up (US01) and sign-in (US02)"
-        },
-        {
             "name": "Health",
             "description": "Liveness of the service skeleton"
+        },
+        {
+            "name": "Authentication",
+            "description": "Administrator sign-up (US01), sign-in (US02) and password recovery (US03)"
+        },
+        {
+            "name": "Device tokens",
+            "description": "Firebase tokens of the devices that receive earthquake alerts (US14)"
         }
     ],
     "paths": {
+        "/api/v1/device-tokens": {
+            "post": {
+                "tags": [
+                    "Device tokens"
+                ],
+                "summary": "Register the device of the signed-in user",
+                "description": "US14. Stores the Firebase token of the device so that Notification can push earthquake alerts to it. Registering a known token again refreshes it; a token registered by another user moves to the signed-in user. Call it through the API gateway with 'Authorization: Bearer <token>'; the gateway sets X-User-Id.",
+                "operationId": "register",
+                "parameters": [
+                    {
+                        "name": "X-User-Id",
+                        "in": "header",
+                        "description": "Id of the signed-in user, set by the API gateway from the token; clients do not send it",
+                        "required": true,
+                        "example": "7d3c5b1e-2f4a-4c8e-9b6d-1a2b3c4d5e6f"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeviceTokenRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "The device was registered",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeviceTokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "The device was already registered; it was refreshed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeviceTokenResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid data; field errors are listed in 'errors'",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                },
+                                "examples": {
+                                    "Unknown platform": {
+                                        "description": "Unknown platform",
+                                        "value": {
+                                            "type": "about:blank",
+                                            "title": "Bad Request",
+                                            "status": 400,
+                                            "detail": "Invalid request content.",
+                                            "instance": "/api/v1/device-tokens",
+                                            "errors": {
+                                                "platform": "must be one of ANDROID, IOS, WEB"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "The request did not come through the gateway with a valid token",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                },
+                                "examples": {
+                                    "Missing X-User-Id": {
+                                        "description": "Missing X-User-Id",
+                                        "value": {
+                                            "type": "about:blank",
+                                            "title": "Unauthorized",
+                                            "status": 401,
+                                            "detail": "The request has no valid X-User-Id header. Call this endpoint through the API gateway with a valid token.",
+                                            "instance": "/api/v1/device-tokens"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/authentication/sign-up": {
             "post": {
                 "tags": [
@@ -126,6 +228,116 @@
                 }
             }
         },
+        "/api/v1/authentication/reset-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Reset the password with a link",
+                "description": "US03. Sets a new password with the token of a reset link. The link works once and for 30 minutes; afterwards every other unused link of the user stops working too. Tokens issued before the reset stay valid until they expire (15 minutes).",
+                "operationId": "resetPassword",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResetPasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "The password was changed. Empty body"
+                    },
+                    "400": {
+                        "description": "Invalid data (field errors in 'errors'), or an unknown, expired or already used link",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                },
+                                "examples": {
+                                    "Invalid or expired link": {
+                                        "description": "Invalid or expired link",
+                                        "value": {
+                                            "type": "about:blank",
+                                            "title": "Bad Request",
+                                            "status": 400,
+                                            "detail": "Invalid or expired token.",
+                                            "instance": "/api/v1/authentication/reset-password"
+                                        }
+                                    },
+                                    "Weak password": {
+                                        "description": "Weak password",
+                                        "value": {
+                                            "type": "about:blank",
+                                            "title": "Bad Request",
+                                            "status": 400,
+                                            "detail": "Invalid request content.",
+                                            "instance": "/api/v1/authentication/reset-password",
+                                            "errors": {
+                                                "newPassword": "Password must have at least 8 characters and at most 72 bytes"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/authentication/forgot-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Request a password reset link",
+                "description": "US03. If the email belongs to a user, a single-use link valid for 30 minutes is sent and earlier unused links stop working. The answer is always 202, so it does not reveal whether the email is registered. While Rumi has no mail sender, the link is only written to the service log (development stand-in).",
+                "operationId": "forgotPassword",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ForgotPasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "202": {
+                        "description": "Accepted; a link is sent if the email is registered. Empty body"
+                    },
+                    "400": {
+                        "description": "Missing or malformed email",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                },
+                                "examples": {
+                                    "Malformed email": {
+                                        "description": "Malformed email",
+                                        "value": {
+                                            "type": "about:blank",
+                                            "title": "Bad Request",
+                                            "status": 400,
+                                            "detail": "Invalid request content.",
+                                            "instance": "/api/v1/authentication/forgot-password",
+                                            "errors": {
+                                                "email": "must be a well-formed email address"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/authentication/health": {
             "get": {
                 "tags": [
@@ -160,6 +372,89 @@
     },
     "components": {
         "schemas": {
+            "DeviceTokenRequest": {
+                "type": "object",
+                "description": "Firebase token of the device of the signed-in user",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "description": "Firebase Cloud Messaging registration token of the device",
+                        "example": "dQw4w9WgXcQ:APA91bHun4MxP5egoKMwt2KZFBaFUH-1RYqx",
+                        "maxLength": 1024,
+                        "minLength": 0
+                    },
+                    "platform": {
+                        "type": "string",
+                        "description": "Platform of the device",
+                        "enum": [
+                            "ANDROID",
+                            "IOS",
+                            "WEB"
+                        ],
+                        "example": "ANDROID",
+                        "pattern": "ANDROID|IOS|WEB"
+                    }
+                },
+                "required": [
+                    "platform",
+                    "token"
+                ]
+            },
+            "DeviceTokenResponse": {
+                "type": "object",
+                "description": "A registered device, without its token",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Id of the registered device",
+                        "example": "5c1d7e9a-3b2f-4d6e-8a1c-9f0e2d4b6a8c"
+                    },
+                    "platform": {
+                        "type": "string",
+                        "description": "Platform of the device",
+                        "enum": [
+                            "ANDROID",
+                            "IOS",
+                            "WEB"
+                        ],
+                        "example": "ANDROID"
+                    },
+                    "registeredAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the device was first registered",
+                        "example": "2026-10-29T15:00:00Z"
+                    }
+                }
+            },
+            "ProblemDetail": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "instance": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "properties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
             "SignUpRequest": {
                 "type": "object",
                 "description": "Data of the administrator to register",
@@ -220,33 +515,6 @@
                             "RESIDENT"
                         ],
                         "example": "ADMINISTRATOR"
-                    }
-                }
-            },
-            "ProblemDetail": {
-                "type": "object",
-                "properties": {
-                    "type": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "integer",
-                        "format": "int32"
-                    },
-                    "detail": {
-                        "type": "string"
-                    },
-                    "instance": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "properties": {
-                        "type": "object",
-                        "additionalProperties": {}
                     }
                 }
             },
@@ -313,6 +581,46 @@
                         "example": "2026-10-29T15:15:00Z"
                     }
                 }
+            },
+            "ResetPasswordRequest": {
+                "type": "object",
+                "description": "Token of the reset link and the new password",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "description": "Value of the 'token' parameter of the reset link",
+                        "example": "q3J9Zf1x7Lw0hX2bV8nR4tY6uK5mP1sD3gA7cE9iO0w",
+                        "maxLength": 128,
+                        "minLength": 0
+                    },
+                    "newPassword": {
+                        "type": "string",
+                        "format": "password",
+                        "description": "At least 8 characters and at most 72 bytes in UTF-8",
+                        "example": "Nueva-Clave-Sismo-2026"
+                    }
+                },
+                "required": [
+                    "newPassword",
+                    "token"
+                ]
+            },
+            "ForgotPasswordRequest": {
+                "type": "object",
+                "description": "Email of the account whose password was forgotten",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Email of the user, in any case",
+                        "example": "ana.torres@rumi.pe",
+                        "maxLength": 254,
+                        "minLength": 0
+                    }
+                },
+                "required": [
+                    "email"
+                ]
             },
             "HealthResponse": {
                 "type": "object",
