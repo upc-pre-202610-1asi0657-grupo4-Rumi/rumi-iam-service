@@ -2,6 +2,7 @@ package com.rumi.iam.infrastructure.web;
 
 import com.rumi.iam.application.EmailAlreadyRegisteredException;
 import com.rumi.iam.application.InvalidCredentialsException;
+import com.rumi.iam.application.InvalidResetTokenException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -48,6 +49,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ProblemDetail handleInvalidCredentials(InvalidCredentialsException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidResetTokenException.class)
+    public ProblemDetail handleInvalidResetToken(InvalidResetTokenException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
