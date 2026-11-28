@@ -157,6 +157,8 @@ class AuthenticationControllerTest {
                 .andExpect(jsonPath("$.token").value(TOKEN))
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.expiresAt").value("2026-10-29T16:00:00Z"))
+                .andExpect(jsonPath("$.buildingIds").isArray())
+                .andExpect(jsonPath("$.buildingIds").isEmpty())
                 .andExpect(content().string(not(containsString(UserFixtures.PASSWORD_HASH))));
     }
 

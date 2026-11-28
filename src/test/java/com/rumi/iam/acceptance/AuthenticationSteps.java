@@ -50,6 +50,7 @@ public class AuthenticationSteps {
     public void startWithNoUsers() {
         jdbcTemplate.update("DELETE FROM device_tokens");
         jdbcTemplate.update("DELETE FROM password_reset_tokens");
+        jdbcTemplate.update("DELETE FROM processed_events");
         users.deleteAll();
         clock.setInstant(Instant.now());
         notifier.clear();

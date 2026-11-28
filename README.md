@@ -12,8 +12,9 @@ Identity & Access Management service of **Rumi**, the structural monitoring plat
 
 ## Purpose
 
-Registers administrators (US01), signs users in (US02), recovers forgotten passwords with single-use links (US03) and
-keeps the Firebase tokens of the users' devices so that Notification can push earthquake alerts (US14). Sign-in issues
+Registers administrators (US01), signs users in (US02), recovers forgotten passwords with single-use links (US03),
+keeps the Firebase tokens of the users' devices so that Notification can push earthquake alerts (US14) and links users
+to their buildings from the events of Building Management. Sign-in issues
 the HS256 JWT that
 [`rumi-api-gateway`](https://github.com/upc-pre-202610-1asi0657-grupo4-Rumi/rumi-api-gateway) validates locally on every
 request.
@@ -26,8 +27,8 @@ bounded contexts of the target architecture defined when the monolith was decomp
 
 ## Endpoints
 
-`/api/v1/authentication/**` is public behind the gateway (no token). `/api/v1/device-tokens/**` needs a valid token:
-the gateway validates it and passes the user id in `X-User-Id`.
+`/api/v1/authentication/**` is public behind the gateway (no token). `/api/v1/device-tokens/**` and
+`/api/v1/users/**` need a valid token: the gateway validates it and passes the user id in `X-User-Id`.
 
 | Verb | Path | Description | Request | Response | User story | Status |
 |---|---|---|---|---|---|---|
@@ -36,9 +37,10 @@ the gateway validates it and passes the user id in `X-User-Id`.
 | POST | `/api/v1/authentication/forgot-password` | Request a password reset link | `ForgotPasswordRequest` | `202`, empty body | US03 | implemented |
 | POST | `/api/v1/authentication/reset-password` | Set a new password with a reset link | `ResetPasswordRequest` | `204`, empty body | US03 | implemented |
 | POST | `/api/v1/device-tokens` | Register the device of the signed-in user | `DeviceTokenRequest` | `201` / `200` `DeviceTokenResponse` | US14 | implemented |
+| POST | `/api/v1/users/me/token` | Reissue the token of the signed-in user with its current buildings | none (`Authorization: Bearer`) | `200` `AuthenticationResponse` | US04 | implemented |
 | GET | `/api/v1/authentication/health` | Check that the service is running | none | `200` `HealthResponse` | none | skeleton |
 
-Implemented functional endpoints: 5. Skeleton endpoints: 1.
+Implemented functional endpoints: 6. Skeleton endpoints: 1.
 
 ### Sign-up (US01)
 
@@ -61,7 +63,8 @@ POST /api/v1/authentication/sign-up
 }
 ```
 
-- Every new user is an `ADMINISTRATOR` with no buildings. Residents will join through invitation codes later.
+- Every new user is an `ADMINISTRATOR` with no buildings. A building is added when the administrator registers it
+  (see [Building membership](#building-membership)). Residents will join through invitation codes later.
 - The email is stored trimmed and in lowercase, and must be unique: `409 Conflict` otherwise.
 - The password must have **at least 8 characters** (code points) and **at most 72 bytes** in UTF-8, the part BCrypt
   uses. It is stored only as a BCrypt hash.
@@ -85,11 +88,60 @@ POST /api/v1/authentication/sign-in
   "role": "ADMINISTRATOR",
   "token": "<jwt>",
   "tokenType": "Bearer",
-  "expiresAt": "2026-10-29T15:15:00Z"
+  "expiresAt": "2026-10-29T15:15:00Z",
+  "buildingIds": []
 }
 ```
 
 An unknown email and a wrong password both answer `401` with the same detail, `Invalid email or password.`
+`buildingIds` is the same list as the `buildingIds` claim of the token.
+
+### Building membership
+
+IAM fills `user_building_ids`, and so the `buildingIds` claim, from the events of rumi-building-service:
+
+| Event | Queue (dead letters in `<queue>.dlq`) | Effect | Status |
+|---|---|---|---|
+| `BuildingRegistered` | `rumi.iam.building-registered`, bound to `rumi.building-management.events` with `building-management.building.registered` | The administrator who registered the building is linked to it | implemented |
+| `ResidentJoinedBuilding` | `rumi.iam.resident-joined-building` (planned) | The resident who accepted an invitation is linked to the building | contract only, pending |
+
+- Building publishes through a transactional outbox, so an event can arrive more than once. IAM applies each
+  `eventId` once (`processed_events`) and the key of `user_building_ids` avoids a duplicate link.
+- An event for an unknown user or for a user who is not an administrator, or a malformed message, goes to the dead
+  letter queue. Other failures are retried 3 times (1 s, 2 s) before going there.
+- With the `dev` profile there is no RabbitMQ: the listener does not start, and the demo users come already linked.
+
+### Token reissue
+
+The building appears in the token only after IAM has processed the event, a moment after `POST /api/v1/buildings`
+answers. **The frontend calls `POST /api/v1/users/me/token` after registering a building (and, once it exists,
+after accepting an invitation), and retries briefly** (for example every 500 ms, up to 5 s) until `buildingIds`
+contains the new building.
+
+```
+POST /api/v1/users/me/token
+Authorization: Bearer <current token>
+```
+
+```json
+200 OK
+{
+  "userId": "7d3c5b1e-2f4a-4c8e-9b6d-1a2b3c4d5e6f",
+  "email": "ana.torres@rumi.pe",
+  "role": "ADMINISTRATOR",
+  "token": "<new jwt>",
+  "tokenType": "Bearer",
+  "expiresAt": "2026-10-29T16:15:00Z",
+  "buildingIds": ["7a9b3c1d-2e4f-4b6a-8c0d-1e2f3a4b5c6d"]
+}
+```
+
+- IAM validates the bearer token itself (signature and expiration) and checks that it belongs to `X-User-Id`.
+- The new token keeps the `auth_time` of the password sign-in. **12 hours after the sign-in**
+  (`TOKEN_REISSUE_MAX_SESSION_AGE`) the answer is `401` (`The session started more than 12 hours ago; sign in
+  again`), so a stolen token cannot be renewed forever. Tokens without `auth_time` (issued before this change)
+  cannot be reissued.
+- Revoking tokens before they expire (`tokenVersion`) is not implemented yet.
 
 ### Password recovery (US03)
 
@@ -179,7 +231,7 @@ Every error is an RFC 7807 problem detail (`application/problem+json`). Validati
 | Status | When |
 |---|---|
 | `400` | Invalid data (`errors` map), malformed body, or `Invalid or expired token.` on reset-password |
-| `401` | Wrong credentials on sign-in, or no valid `X-User-Id` on device-tokens |
+| `401` | Wrong credentials on sign-in; no valid `X-User-Id` on device-tokens or users/me/token; invalid bearer token or session older than 12 hours on users/me/token |
 | `409` | Email already registered on sign-up |
 
 ## Token contract with the gateway
@@ -191,9 +243,11 @@ HS256, signed with `JWT_SECRET` (the same value the gateway uses). Claims:
 | `sub` | User id (UUID) |
 | `role` | `ADMINISTRATOR` or `RESIDENT` |
 | `buildingIds` | List of building UUIDs; always present, `[]` for a new administrator |
+| `auth_time` | When the user signed in with a password (epoch seconds, as in OpenID Connect); kept by a reissue |
 | `iat`, `exp` | Issue and expiration time; `exp` = `iat` + `JWT_EXPIRATION` (15 minutes by default) |
 
-There is no refresh token yet: when the token expires, the client must sign in again to get a new one.
+There is no refresh token: before the token expires, the client can get a new one with
+`POST /api/v1/users/me/token`, up to 12 hours after the password sign-in. After that it must sign in again.
 
 `GatewayTokenCompatibilityTest` decodes the issued tokens exactly as the gateway does, so a change that breaks the
 contract fails the build.
@@ -215,7 +269,16 @@ Without any infrastructure, on an in-memory H2 database:
 JWT_SECRET=<at least 32 bytes, same as the gateway> ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-With PostgreSQL (default profile): create `iamdb` and apply [`docs/schema.sql`](docs/schema.sql) first.
+The `dev` profile creates two demo users, already linked to the sample building of the other services
+(`7a9b3c1d-2e4f-4b6a-8c0d-1e2f3a4b5c6d`). Their password is a public demo value, valid only on a local H2 database;
+`DevDataSeederTest` checks that they are never created outside the `dev` profile.
+
+| User | Id | Email | Password | Role |
+|---|---|---|---|---|
+| Administradora Demo | `c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f` | `admin.demo@rumi.dev` | `rumi-demo-2026` | `ADMINISTRATOR` |
+| Residente Demo | `d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70` | `residente.demo@rumi.dev` | `rumi-demo-2026` | `RESIDENT` |
+
+With PostgreSQL and RabbitMQ (default profile): create `iamdb` and apply [`docs/schema.sql`](docs/schema.sql) first.
 
 | Variable | Default |
 |---|---|
@@ -227,6 +290,9 @@ With PostgreSQL (default profile): create `iamdb` and apply [`docs/schema.sql`](
 | `IAM_DB_PASSWORD` | `postgres` |
 | `PASSWORD_RESET_BASE_URL` | `http://localhost:4200/reset-password` (`rumi.password-reset.base-url`): page that opens reset links |
 | `PASSWORD_RESET_TTL` | `PT30M` (`rumi.password-reset.ttl`): how long a reset link works |
+| `TOKEN_REISSUE_MAX_SESSION_AGE` | `PT12H` (`rumi.security.token-reissue.max-session-age`): reissue limit after the sign-in |
+| `RABBITMQ_HOST` / `RABBITMQ_PORT` | `localhost` / `5672` |
+| `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `guest` / `guest` |
 
 ## Test
 
@@ -235,13 +301,16 @@ With PostgreSQL (default profile): create `iamdb` and apply [`docs/schema.sql`](
 ```
 
 Runs the unit tests, the MockMvc and JPA slice tests, the gateway token contract test and the Cucumber scenarios
-of [`src/test/resources/features`](src/test/resources/features) (tagged `@US01`, `@US02`, `@US03` and `@US14`) with a
-fake test-only secret.
+of [`src/test/resources/features`](src/test/resources/features) (tagged `@US01`, `@US02`, `@US03`, `@US04` and `@US14`)
+with a fake test-only secret.
 
 **Docker must be running.** The JPA tests, the Cucumber scenarios and the context test share one PostgreSQL 16
 container (Testcontainers), created from [`docs/schema.sql`](docs/schema.sql) with Hibernate in `validate` mode, so the
 build fails if the schema and the JPA entities disagree. `src/test/resources/docker-java.properties` pins Docker API
 1.44, which Docker Engine 25 and later accept (Engine 29 rejects the older default of the client).
+
+The tests do not need the RabbitMQ of Docker Compose: the listener is off in the `test` profile, and
+`BuildingRegisteredSubscriberIntegrationTest` starts its own RabbitMQ container.
 
 ## Structure
 
@@ -250,23 +319,27 @@ com.rumi.iam
 ├── domain
 │   ├── model          User (aggregate root), PasswordResetToken, DeviceToken, DevicePlatform, Role,
 │   │                  EmailAddress, PasswordPolicy
-│   ├── repository     UserRepository, PasswordResetTokenRepository, DeviceTokenRepository
-│   └── service        PasswordHasher, TokenIssuer, IssuedToken, ResetTokenGenerator,
+│   ├── repository     UserRepository, PasswordResetTokenRepository, DeviceTokenRepository,
+│   │                  ProcessedEventRepository
+│   └── service        PasswordHasher, TokenIssuer, IssuedToken, AccessTokenReader, ResetTokenGenerator,
 │                      PasswordResetNotifier (Anti-Corruption Layer towards mail)
 ├── application        AuthenticationApplicationService (sign-up, sign-in, password recovery),
-│                      DeviceTokenApplicationService
+│                      DeviceTokenApplicationService, BuildingMembershipApplicationService,
+│                      TokenReissueApplicationService
 └── infrastructure     OpenAPI configuration
+    ├── messaging      RabbitMQ queue, dead letter queue and BuildingRegistered listener
     ├── persistence    JPA entities and repositories
-    ├── security       BCrypt hasher, JWT issuer, SHA-256 reset token generator, properties
+    ├── security       BCrypt hasher, JWT issuer and reader, SHA-256 reset token generator, properties
+    ├── seed           demo users of the dev profile
     ├── notification   LoggingPasswordResetNotifier (development stand-in)
-    └── web            authentication, device-token and health endpoints, X-User-Id resolver, DTOs,
-                       problem details
+    └── web            authentication, current-user, device-token and health endpoints, X-User-Id resolver,
+                       DTOs, problem details
 ```
 
 ## Follow-ups
 
-- Fill `user_building_ids` when an administrator registers a building or a resident uses an invitation.
+- Link residents when they accept an invitation (`ResidentJoinedBuilding`, pending).
 - Add `GET /api/v1/users/{id}`, then return a `Location` header from sign-up.
 - A mail adapter for `PasswordResetNotifier` once Notification can send e-mail.
 - `DELETE /api/v1/device-tokens/{id}` to unregister a device at sign-out.
-- A revocation list for access tokens issued before a password reset.
+- Token revocation with a `tokenVersion` per user, also for tokens issued before a password reset.

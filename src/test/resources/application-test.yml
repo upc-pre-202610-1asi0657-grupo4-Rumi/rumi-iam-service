@@ -1,5 +1,12 @@
 # Test profile. The datasource is the PostgreSQL container of PostgresTestContainer (@ServiceConnection);
 # the schema comes from docs/schema.sql and Hibernate only validates it (ddl-auto=validate, from application.yml).
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        # Hermetic tests: no broker unless a test starts its own RabbitMQ container and turns the listener on.
+        auto-startup: false
+
 rumi:
   security:
     jwt:

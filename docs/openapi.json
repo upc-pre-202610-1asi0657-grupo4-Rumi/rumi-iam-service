@@ -21,11 +21,69 @@
             "description": "Administrator sign-up (US01), sign-in (US02) and password recovery (US03)"
         },
         {
+            "name": "Current user",
+            "description": "Operations of the signed-in user"
+        },
+        {
             "name": "Device tokens",
             "description": "Firebase tokens of the devices that receive earthquake alerts (US14)"
         }
     ],
     "paths": {
+        "/api/v1/users/me/token": {
+            "post": {
+                "tags": [
+                    "Current user"
+                ],
+                "summary": "Reissue the token of the signed-in user",
+                "description": "Returns a new token with the buildings IAM knows now. Call it after registering a building: IAM links the building asynchronously, so retry a few times (for example every 500 ms, up to 5 s) until buildingIds contains the new building. The new token keeps the auth_time of the password sign-in; 12 hours after it the answer is 401 and the user must sign in again. Send the current token as 'Authorization: Bearer <token>' through the gateway.",
+                "operationId": "reissueToken",
+                "responses": {
+                    "200": {
+                        "description": "A new token for the same user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthenticationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No signed-in user, the token is not valid or belongs to another user, or the session started more than 12 hours ago",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetail"
+                                },
+                                "examples": {
+                                    "Invalid token": {
+                                        "description": "Invalid token",
+                                        "value": {
+                                            "type": "about:blank",
+                                            "title": "Unauthorized",
+                                            "status": 401,
+                                            "detail": "The access token is not valid",
+                                            "instance": "/api/v1/users/me/token"
+                                        }
+                                    },
+                                    "Session too old": {
+                                        "description": "Session too old",
+                                        "value": {
+                                            "type": "about:blank",
+                                            "title": "Unauthorized",
+                                            "status": 401,
+                                            "detail": "The session started more than 12 hours ago; sign in again",
+                                            "instance": "/api/v1/users/me/token"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/device-tokens": {
             "post": {
                 "tags": [
@@ -372,6 +430,85 @@
     },
     "components": {
         "schemas": {
+            "AuthenticationResponse": {
+                "type": "object",
+                "description": "The signed-in user and its access token",
+                "properties": {
+                    "userId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Id of the user",
+                        "example": "7d3c5b1e-2f4a-4c8e-9b6d-1a2b3c4d5e6f"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Email of the user, in lowercase",
+                        "example": "ana.torres@rumi.pe"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Role of the user",
+                        "enum": [
+                            "ADMINISTRATOR",
+                            "RESIDENT"
+                        ],
+                        "example": "ADMINISTRATOR"
+                    },
+                    "token": {
+                        "type": "string",
+                        "description": "HS256 JWT to send as 'Authorization: Bearer <token>' through the API gateway"
+                    },
+                    "tokenType": {
+                        "type": "string",
+                        "description": "Type of the token",
+                        "example": "Bearer"
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the token expires",
+                        "example": "2026-10-29T15:15:00Z"
+                    },
+                    "buildingIds": {
+                        "type": "array",
+                        "description": "Buildings of the user, the same list as the buildingIds claim of the token",
+                        "example": [
+                            "7a9b3c1d-2e4f-4b6a-8c0d-1e2f3a4b5c6d"
+                        ],
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                }
+            },
+            "ProblemDetail": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "instance": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "properties": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
+                }
+            },
             "DeviceTokenRequest": {
                 "type": "object",
                 "description": "Firebase token of the device of the signed-in user",
@@ -425,33 +562,6 @@
                         "format": "date-time",
                         "description": "When the device was first registered",
                         "example": "2026-10-29T15:00:00Z"
-                    }
-                }
-            },
-            "ProblemDetail": {
-                "type": "object",
-                "properties": {
-                    "type": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "integer",
-                        "format": "int32"
-                    },
-                    "detail": {
-                        "type": "string"
-                    },
-                    "instance": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "properties": {
-                        "type": "object",
-                        "additionalProperties": {}
                     }
                 }
             },
@@ -540,47 +650,6 @@
                     "email",
                     "password"
                 ]
-            },
-            "AuthenticationResponse": {
-                "type": "object",
-                "description": "The signed-in user and its access token",
-                "properties": {
-                    "userId": {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Id of the user",
-                        "example": "7d3c5b1e-2f4a-4c8e-9b6d-1a2b3c4d5e6f"
-                    },
-                    "email": {
-                        "type": "string",
-                        "description": "Email of the user, in lowercase",
-                        "example": "ana.torres@rumi.pe"
-                    },
-                    "role": {
-                        "type": "string",
-                        "description": "Role of the user",
-                        "enum": [
-                            "ADMINISTRATOR",
-                            "RESIDENT"
-                        ],
-                        "example": "ADMINISTRATOR"
-                    },
-                    "token": {
-                        "type": "string",
-                        "description": "HS256 JWT to send as 'Authorization: Bearer <token>' through the API gateway"
-                    },
-                    "tokenType": {
-                        "type": "string",
-                        "description": "Type of the token",
-                        "example": "Bearer"
-                    },
-                    "expiresAt": {
-                        "type": "string",
-                        "format": "date-time",
-                        "description": "When the token expires",
-                        "example": "2026-10-29T15:15:00Z"
-                    }
-                }
             },
             "ResetPasswordRequest": {
                 "type": "object",
