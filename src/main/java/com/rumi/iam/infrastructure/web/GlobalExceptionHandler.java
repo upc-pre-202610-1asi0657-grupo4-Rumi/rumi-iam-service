@@ -1,8 +1,10 @@
 package com.rumi.iam.infrastructure.web;
 
 import com.rumi.iam.application.EmailAlreadyRegisteredException;
+import com.rumi.iam.application.InvalidAccessTokenException;
 import com.rumi.iam.application.InvalidCredentialsException;
 import com.rumi.iam.application.InvalidResetTokenException;
+import com.rumi.iam.application.SessionExpiredException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -54,6 +56,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidResetTokenException.class)
     public ProblemDetail handleInvalidResetToken(InvalidResetTokenException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidAccessTokenException.class)
+    public ProblemDetail handleInvalidAccessToken(InvalidAccessTokenException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
+    }
+
+    @ExceptionHandler(SessionExpiredException.class)
+    public ProblemDetail handleSessionExpired(SessionExpiredException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
     }
 
     @ExceptionHandler(MissingUserIdException.class)

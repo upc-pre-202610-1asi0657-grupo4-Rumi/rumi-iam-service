@@ -133,4 +133,34 @@ class UserTest {
     void neverPrintsThePasswordHash() {
         assertThat(UserFixtures.administrator().toString()).doesNotContain(UserFixtures.PASSWORD_HASH);
     }
+
+    @Test
+    void linkingABuildingReturnsTheUserWithThatBuildingAndLeavesTheOriginalUnchanged() {
+        UUID building = UUID.fromString("7a9b3c1d-2e4f-4b6a-8c0d-1e2f3a4b5c6d");
+        User original = UserFixtures.administrator();
+
+        User linked = original.linkBuilding(building);
+
+        assertThat(linked.getBuildingIds()).containsExactly(building);
+        assertThat(linked.belongsTo(building)).isTrue();
+        assertThat(linked.getId()).isEqualTo(original.getId());
+        assertThat(linked.getRole()).isEqualTo(original.getRole());
+        assertThat(original.getBuildingIds()).isEmpty();
+    }
+
+    @Test
+    void linkingTheSameBuildingTwiceKeepsOneLink() {
+        UUID building = UUID.fromString("7a9b3c1d-2e4f-4b6a-8c0d-1e2f3a4b5c6d");
+
+        User linked = UserFixtures.administrator().linkBuilding(building).linkBuilding(building);
+
+        assertThat(linked.getBuildingIds()).containsExactly(building);
+    }
+
+    @Test
+    void rejectsLinkingAMissingBuilding() {
+        assertThatThrownBy(() -> UserFixtures.administrator().linkBuilding(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("Building id is required");
+    }
 }

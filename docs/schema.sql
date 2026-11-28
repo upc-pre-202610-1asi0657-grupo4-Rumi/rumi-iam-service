@@ -11,7 +11,8 @@ CREATE TABLE users (
     created_at    timestamp    NOT NULL
 );
 
--- Buildings a user belongs to; copied into the buildingIds claim of the token. Empty until a later story fills it.
+-- Buildings a user belongs to; copied into the buildingIds claim of the token. Filled from the BuildingRegistered
+-- events of rumi-building-service (and, later, ResidentJoinedBuilding).
 CREATE TABLE user_building_ids (
     user_id     uuid NOT NULL REFERENCES users (id),
     building_id uuid NOT NULL,
@@ -39,3 +40,10 @@ CREATE TABLE device_tokens (
     updated_at    timestamp     NOT NULL
 );
 CREATE INDEX idx_device_tokens_user ON device_tokens (user_id);
+
+-- Integration events already applied, by eventId: a redelivered event is discarded (at-least-once delivery).
+CREATE TABLE processed_events (
+    event_id     uuid         PRIMARY KEY,
+    event_type   varchar(100) NOT NULL,
+    processed_at timestamp    NOT NULL
+);

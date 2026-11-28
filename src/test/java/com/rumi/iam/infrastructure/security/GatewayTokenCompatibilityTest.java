@@ -36,7 +36,7 @@ class GatewayTokenCompatibilityTest {
     void theGatewayAcceptsTheTokenOfANewAdministrator() {
         User administrator = UserFixtures.administrator();
 
-        IssuedToken token = issuer(SECRET, now).issue(administrator);
+        IssuedToken token = issuer(SECRET, now).issue(administrator, now);
         Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(token.value());
 
         assertThat(jwt.getHeaders()).containsEntry("alg", "HS256");
@@ -55,7 +55,7 @@ class GatewayTokenCompatibilityTest {
         User resident = new User(UUID.randomUUID(), new EmailAddress("luis@rumi.pe"), "Luis Quispe",
                 UserFixtures.PASSWORD_HASH, Role.RESIDENT, Set.of(building), UserFixtures.CREATED_AT);
 
-        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(issuer(SECRET, now).issue(resident).value());
+        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(issuer(SECRET, now).issue(resident, now).value());
 
         assertThat(jwt.getClaimAsString("role")).isEqualTo("RESIDENT");
         assertThat(jwt.getClaimAsStringList("buildingIds")).containsExactly(building.toString());
@@ -63,21 +63,33 @@ class GatewayTokenCompatibilityTest {
 
     @Test
     void theTokenCarriesNoPersonalDataBeyondTheContract() {
-        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(issuer(SECRET, now).issue(UserFixtures.administrator()).value());
+        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(issuer(SECRET, now).issue(UserFixtures.administrator(), now).value());
 
-        assertThat(jwt.getClaims().keySet()).containsExactlyInAnyOrder("sub", "role", "buildingIds", "iat", "exp");
+        assertThat(jwt.getClaims().keySet())
+                .containsExactlyInAnyOrder("sub", "role", "buildingIds", "auth_time", "iat", "exp");
+    }
+
+    @Test
+    void aReissuedTokenKeepsTheAuthTimeOfThePasswordSignInAndTheGatewayAcceptsIt() {
+        Instant signedInAt = now.minus(Duration.ofHours(3));
+
+        Jwt jwt = GatewayJwtDecoder.create(SECRET).decode(
+                issuer(SECRET, now).issue(UserFixtures.administrator(), signedInAt).value());
+
+        assertThat(((Number) jwt.getClaim("auth_time")).longValue()).isEqualTo(signedInAt.getEpochSecond());
+        assertThat(jwt.getIssuedAt()).isEqualTo(now);
     }
 
     @Test
     void theGatewayRejectsATokenSignedWithAnotherSecret() {
-        String token = issuer(OTHER_SECRET, now).issue(UserFixtures.administrator()).value();
+        String token = issuer(OTHER_SECRET, now).issue(UserFixtures.administrator(), now).value();
 
         assertThatThrownBy(() -> GatewayJwtDecoder.create(SECRET).decode(token)).isInstanceOf(JwtException.class);
     }
 
     @Test
     void theGatewayRejectsAnExpiredToken() {
-        String token = issuer(SECRET, now.minus(Duration.ofHours(2))).issue(UserFixtures.administrator()).value();
+        String token = issuer(SECRET, now.minus(Duration.ofHours(2))).issue(UserFixtures.administrator(), now.minus(Duration.ofHours(2))).value();
 
         assertThatThrownBy(() -> GatewayJwtDecoder.create(SECRET).decode(token)).isInstanceOf(JwtValidationException.class);
     }
@@ -87,7 +99,7 @@ class GatewayTokenCompatibilityTest {
         JwtSecurityProperties properties = new JwtSecurityProperties(SECRET, Duration.ofMinutes(30));
         NimbusJwtTokenIssuer issuer = new NimbusJwtTokenIssuer(properties, Clock.fixed(now, ZoneOffset.UTC));
 
-        assertThat(issuer.issue(UserFixtures.administrator()).expiresAt()).isEqualTo(now.plus(Duration.ofMinutes(30)));
+        assertThat(issuer.issue(UserFixtures.administrator(), now).expiresAt()).isEqualTo(now.plus(Duration.ofMinutes(30)));
     }
 
     private static NimbusJwtTokenIssuer issuer(String secret, Instant instant) {

@@ -39,7 +39,7 @@ public class NimbusJwtTokenIssuer implements TokenIssuer {
     }
 
     @Override
-    public IssuedToken issue(User user) {
+    public IssuedToken issue(User user, Instant authTime) {
         // JWT times are whole seconds; truncating keeps expiresAt equal to the exp claim.
         Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.SECONDS);
         Instant expiresAt = issuedAt.plus(expiration);
@@ -51,6 +51,7 @@ public class NimbusJwtTokenIssuer implements TokenIssuer {
                 .expiresAt(expiresAt)
                 .claim(JwtClaimNames.ROLE, user.getRole().name())
                 .claim(JwtClaimNames.BUILDING_IDS, buildingIds)
+                .claim(JwtClaimNames.AUTH_TIME, authTime.getEpochSecond())
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
 

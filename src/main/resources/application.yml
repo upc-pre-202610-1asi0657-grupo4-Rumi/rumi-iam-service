@@ -23,6 +23,21 @@ spring:
           time_zone: UTC
         type:
           preferred_instant_jdbc_type: TIMESTAMP
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        # A failing message is retried a few times (for example, the database is briefly down); after that,
+        # or at once for a message that cannot be applied, it goes to the dead letter queue.
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
 
 rumi:
   security:
@@ -30,6 +45,9 @@ rumi:
       # HS256 key shared with rumi-api-gateway. Required, at least 32 bytes; there is no default on purpose.
       secret: ${JWT_SECRET:}
       expiration: ${JWT_EXPIRATION:PT15M}
+    token-reissue:
+      # POST /api/v1/users/me/token answers 401 when the password sign-in is older than this.
+      max-session-age: ${TOKEN_REISSUE_MAX_SESSION_AGE:PT12H}
   password-reset:
     # Frontend page that opens the reset link; the token is added as ?token=...
     base-url: ${PASSWORD_RESET_BASE_URL:http://localhost:4200/reset-password}

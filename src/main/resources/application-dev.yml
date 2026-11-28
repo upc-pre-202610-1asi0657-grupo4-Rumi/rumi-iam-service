@@ -8,3 +8,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  rabbitmq:
+    listener:
+      simple:
+        # No RabbitMQ in dev: the BuildingRegistered listener is not started. DevDataSeeder links the demo users.
+        auto-startup: false

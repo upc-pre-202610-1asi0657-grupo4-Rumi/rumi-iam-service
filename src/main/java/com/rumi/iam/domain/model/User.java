@@ -1,6 +1,7 @@
 package com.rumi.iam.domain.model;
 
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -45,6 +46,21 @@ public final class User {
      */
     public User withPasswordHash(String newPasswordHash) {
         return new User(id, email, fullName, newPasswordHash, role, buildingIds, createdAt);
+    }
+
+    /**
+     * Returns the same user linked to one more building, which the next token carries in buildingIds.
+     * Linking a building the user already has returns an equal user.
+     */
+    public User linkBuilding(UUID buildingId) {
+        Objects.requireNonNull(buildingId, "Building id is required");
+        Set<UUID> linked = new HashSet<>(buildingIds);
+        linked.add(buildingId);
+        return new User(id, email, fullName, passwordHash, role, linked, createdAt);
+    }
+
+    public boolean belongsTo(UUID buildingId) {
+        return buildingIds.contains(buildingId);
     }
 
     public UUID getId() {

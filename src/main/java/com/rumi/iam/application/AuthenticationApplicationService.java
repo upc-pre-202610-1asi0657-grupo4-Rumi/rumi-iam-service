@@ -85,7 +85,7 @@ public class AuthenticationApplicationService {
         if (user.isEmpty() || !matches) {
             throw new InvalidCredentialsException();
         }
-        return new AuthenticatedUser(user.get(), tokenIssuer.issue(user.get()));
+        return new AuthenticatedUser(user.get(), tokenIssuer.issue(user.get(), clock.instant()));
     }
 
     /**

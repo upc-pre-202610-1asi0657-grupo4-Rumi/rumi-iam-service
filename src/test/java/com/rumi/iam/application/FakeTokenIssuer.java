@@ -10,8 +10,11 @@ class FakeTokenIssuer implements TokenIssuer {
 
     static final Instant EXPIRES_AT = Instant.parse("2026-10-29T16:00:00Z");
 
+    Instant lastAuthTime;
+
     @Override
-    public IssuedToken issue(User user) {
+    public IssuedToken issue(User user, Instant authTime) {
+        lastAuthTime = authTime;
         return new IssuedToken("token-for-" + user.getId(), EXPIRES_AT);
     }
 }
